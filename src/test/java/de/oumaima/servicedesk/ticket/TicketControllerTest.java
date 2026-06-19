@@ -11,6 +11,7 @@ import org.springframework.boot.webmvc.autoconfigure.WebMvcProperties;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,6 +29,7 @@ public class TicketControllerTest {
     @Autowired private UserRepository userRepository;
 
     @Test
+    @WithMockUser
     void postThenGet_returnsTheCreatedTicket() throws Exception {
         User requester = new User();
         requester.setEmail("alice@example.com");
