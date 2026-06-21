@@ -18,6 +18,9 @@ public class User {
     @Column(nullable = false, unique = true, length = 255)
     private String email;
 
+    @Column(nullable = false, length = 60)
+    private String passwordHash;
+
     @Column(nullable = false, length = 150)
     private String fullName;
 
@@ -62,5 +65,13 @@ public class User {
 
     public OffsetDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 }
