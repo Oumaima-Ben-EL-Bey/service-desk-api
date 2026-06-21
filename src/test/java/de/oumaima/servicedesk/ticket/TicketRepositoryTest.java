@@ -39,11 +39,13 @@ public class TicketRepositoryTest {
         User alice = new User();
         alice.setEmail("alice@example.com");
         alice.setFullName("Alice");
+        alice.setPasswordHash("test-hash");
         userRepository.save(alice);
 
         User bob = new User();
         bob.setEmail("bob@example.com");
         bob.setFullName("Bob");
+        bob.setPasswordHash("test-hash");
         userRepository.save(bob);
 
         persistTicket("Alice's first ticket", alice);

@@ -23,6 +23,7 @@ public class UserRepositoryTest {
         User user = new User();
         user.setEmail("jane@example.com");
         user.setFullName("Jane Doe");
+        user.setPasswordHash("test-hash");
         userRepository.save(user);
 
         Optional<User> found = userRepository.findByEmail("jane@example.com");

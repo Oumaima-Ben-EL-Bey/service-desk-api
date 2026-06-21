@@ -34,6 +34,7 @@ public class TicketControllerTest {
         User requester = new User();
         requester.setEmail("alice@example.com");
         requester.setFullName("Alice");
+        requester.setPasswordHash("test-hash");
         requester = userRepository.save(requester);
 
         CreateTicketRequest request = new CreateTicketRequest(
