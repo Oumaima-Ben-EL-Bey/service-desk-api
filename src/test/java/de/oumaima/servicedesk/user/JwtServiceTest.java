@@ -1,6 +1,7 @@
 package de.oumaima.servicedesk.user;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class JwtServiceTest {
 
@@ -31,4 +33,35 @@ public class JwtServiceTest {
         assertThat(claims.getSubject()).isEqualTo("jane@example.com");
         assertThat(claims.getExpiration()).isAfter(claims.getIssuedAt());
     }
+
+    @Test
+    void parseAndValidate_throwsOnBadSignature() {
+        JwtService minter = new JwtService(SECRET, EXPIRATION_MS);
+        String token = minter.generateToken("jane@example.com");
+
+        JwtService impostor = new JwtService("a-totally-different-secret-32-bytes-min!!", EXPIRATION_MS);
+
+        assertThatThrownBy(() -> impostor.parseAndValidate(token))
+                .isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void parseAndValidate_throwsOnExpiredToken() {
+        JwtService minter = new JwtService(SECRET, -1000L);
+        String token = minter.generateToken("jane@example.com");
+
+
+        assertThatThrownBy(() -> minter.parseAndValidate(token))
+                .isInstanceOf(JwtException.class);
+    }
+    @Test
+    void parseAndValidate_returnsEmail() {
+        JwtService minter = new JwtService(SECRET, EXPIRATION_MS);
+        String token = minter.generateToken("jane@example.com");
+        String email = minter.parseAndValidate(token);
+
+        assertThat(email).isEqualTo("jane@example.com");
+    }
+
+
 }
