@@ -40,6 +40,7 @@ public class UserServiceTest {
         verify(passwordEncoder).encode("secret123");
     }
 
+    @Test
     void register_throwsWhenEmailExists() {
         RegisterRequest request = new RegisterRequest("jane@example.com", "Jane Doe", "secret123");
         when(userRepository.findByEmail("jane@example.com")).thenReturn(Optional.of(new User()));
