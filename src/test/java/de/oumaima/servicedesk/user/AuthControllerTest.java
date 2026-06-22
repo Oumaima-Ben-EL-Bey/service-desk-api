@@ -70,4 +70,49 @@ public class AuthControllerTest {
                         .content(json))
                 .andExpect(status().isConflict());
     }
+
+
+    @Test
+    void login_returns200_andToken_whenCredentialsValid() throws Exception {
+        RegisterRequest register = new RegisterRequest("login-ok@example.com", "Login Ok", "secret123");
+        mockMvc.perform(post("/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(register)))
+                .andExpect(status().isCreated());
+
+        LoginRequest login = new LoginRequest("login-ok@example.com", "secret123");
+        mockMvc.perform(post("/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").exists());
+    }
+
+    @Test
+    void login_returns401_whenPasswordWrong() throws Exception {
+        RegisterRequest register = new RegisterRequest("login-nok@example.com", "Login not Ok", "correctpw");
+        mockMvc.perform(post("/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(register)))
+                .andExpect(status().isCreated());
+
+        LoginRequest login = new LoginRequest("login-nok@example.com", "falsepw");
+        mockMvc.perform(post("/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.token").doesNotExist());
+    }
+
+    @Test
+    void login_returns401_whenUserUnknown() throws Exception {
+        LoginRequest login = new LoginRequest("unknown_user@example.com", "secret123");
+        mockMvc.perform(post("/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.token").doesNotExist());
+
+    }
+
 }
