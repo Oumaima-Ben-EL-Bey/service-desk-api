@@ -23,6 +23,8 @@ public class UserServiceTest {
     private PasswordEncoder passwordEncoder;
     @InjectMocks
     private UserService userService;
+    @Mock
+    private RoleRepository roleRepository;
 
     @Test
     void register_hashesPassword_andSavesUser() {
@@ -31,7 +33,7 @@ public class UserServiceTest {
         when(userRepository.findByEmail("jane@example.com")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("secret123")).thenReturn("hashed-pw");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
+        when(roleRepository.findByName("REQUESTER")).thenReturn(Optional.of(new Role()));
         // Act
         User result = userService.register(request);
 
@@ -47,5 +49,19 @@ public class UserServiceTest {
 
         assertThatThrownBy(() -> userService.register(request)) .isInstanceOf(ResponseStatusException.class);
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void register_assignsRequesterRole() {
+        RegisterRequest request = new RegisterRequest("jane@example.com", "Jane Doe", "secret123");
+        Role requesterRole = new Role();
+        when(userRepository.findByEmail("jane@example.com")).thenReturn(Optional.empty());
+        when(roleRepository.findByName("REQUESTER")).thenReturn(Optional.of(requesterRole));
+        when(passwordEncoder.encode("secret123")).thenReturn("hashed-pw");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User result = userService.register(request);
+
+        assertThat(result.getRoles()).contains(requesterRole);
     }
 }
