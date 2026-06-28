@@ -67,4 +67,14 @@ public class JwtAuthenticationFilterTest {
                         .header("Authorization", "Bearer garbage.not.a.real.token"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void validTokenForMissingUser_returns401() throws Exception {
+        // no user saved for this email — simulates a since-deleted (or never-existing) user
+        String token = jwtService.generateToken("ghost@example.com");
+
+        mockMvc.perform(get("/tickets/999999")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
 }

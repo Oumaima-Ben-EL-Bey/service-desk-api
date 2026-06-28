@@ -1,9 +1,11 @@
 package de.oumaima.servicedesk.ticket;
 
+import de.oumaima.servicedesk.user.CustomUserDetails;
 import de.oumaima.servicedesk.user.User;
 import de.oumaima.servicedesk.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -12,17 +14,15 @@ import org.springframework.web.server.ResponseStatusException;
 public class TicketController {
 
     private final TicketRepository ticketRepository;
-    private final UserRepository userRepository;
 
-    public TicketController(TicketRepository ticketRepository, UserRepository userRepository) {
+    public TicketController(TicketRepository ticketRepository) {
         this.ticketRepository = ticketRepository;
-        this.userRepository = userRepository;
     }
 
     @PostMapping
-    public ResponseEntity<TicketResponse> create(@RequestBody CreateTicketRequest request) {
-        User requester = userRepository.findById(request.requesterId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Requester not found"));
+    public ResponseEntity<TicketResponse> create(@RequestBody CreateTicketRequest request,
+                                                 @AuthenticationPrincipal CustomUserDetails principal) {
+        User requester = principal.getUser();
 
         Ticket ticket = TicketMapper.toEntity(request, requester);
         Ticket saved = ticketRepository.save(ticket);
