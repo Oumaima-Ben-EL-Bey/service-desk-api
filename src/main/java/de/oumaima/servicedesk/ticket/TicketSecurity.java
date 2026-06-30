@@ -18,18 +18,15 @@ public class TicketSecurity {
         Ticket ticket = ticketRepository.findById(id)
                 .orElseThrow(()-> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
         User user = principal.getUser();
-        if (hasRole(user, "ADMIN")) {
+        if (user.hasRole("ADMIN")) {
             return true;
         }
-        if (hasRole(user, "AGENT")) {
+        if (user.hasRole("AGENT")) {
             return ticket.getTeam() != null
                     && user.getTeam() != null
                     && ticket.getTeam().getId().equals(user.getTeam().getId());
         }
         return ticket.getRequester().getId().equals(user.getId());
     }
-    private boolean hasRole(User user, String roleName) {
-        return user.getRoles().stream()
-                .anyMatch(role -> role.getName().equals(roleName));
-    }
+
 }
