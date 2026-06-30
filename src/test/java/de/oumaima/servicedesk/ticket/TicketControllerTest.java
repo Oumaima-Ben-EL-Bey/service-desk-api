@@ -173,4 +173,74 @@ public class TicketControllerTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void requesterListsOnlyTheirOwnTickets() throws Exception {
+        User alice = saveUser("alice-list@example.com");
+        User bob = saveUser("bob-list@example.com");
+        Ticket aliceTicket = saveTicket("Alice ticket", alice, null);
+        Ticket bobTicket = saveTicket("Bob ticket", bob, null);
+
+        String token = jwtService.generateToken("alice-list@example.com");
+
+        String body = mockMvc.perform(get("/tickets")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        TicketResponse[] tickets = objectMapper.readValue(body, TicketResponse[].class);
+
+        assertThat(tickets).extracting(TicketResponse::id)
+                .contains(aliceTicket.getId())
+                .doesNotContain(bobTicket.getId());
+    }
+
+    @Test
+    void agentListsOnlyTheirOwnTeamTickets() throws Exception {
+        Team teamNet = saveTeam("Network_List");
+        Team teamHar = saveTeam("Hardware_List");
+        User AgentNet = saveUserWithRole("Network-list@example.com","AGENT",teamNet);
+        User AgentHar = saveUserWithRole("Hardware-list@example.com","AGENT",teamHar);
+        User requester = saveUser("requester_netTicket@example.com");
+
+        Ticket NetTicket = saveTicket("Network ticket", requester, teamNet);
+        Ticket HarTicket = saveTicket("Hardware ticket", requester, teamHar);
+
+        String token = jwtService.generateToken("Network-list@example.com");
+
+        String body = mockMvc.perform(get("/tickets")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        TicketResponse[] tickets = objectMapper.readValue(body, TicketResponse[].class);
+
+        assertThat(tickets).extracting(TicketResponse::id)
+                .contains(NetTicket.getId())
+                .doesNotContain(HarTicket.getId());
+    }
+
+    @Test
+    void adminListsAllTickets() throws Exception {
+        Team teamNet = saveTeam("Network_List_ad");
+        Team teamHar = saveTeam("Hardware_List_ad");
+        User Admin = saveUserWithRole("admin-list@example.com","ADMIN", null);
+        User requester = saveUser("requester_allTicket@example.com");
+
+        Ticket NetTicket = saveTicket("Network ticket", requester, teamNet);
+        Ticket HarTicket = saveTicket("Hardware ticket", requester, teamHar);
+
+        String token = jwtService.generateToken("admin-list@example.com");
+
+        String body = mockMvc.perform(get("/tickets")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        TicketResponse[] tickets = objectMapper.readValue(body, TicketResponse[].class);
+
+        assertThat(tickets).extracting(TicketResponse::id)
+                .contains(NetTicket.getId())
+                .contains(HarTicket.getId());
+    }
+
 }
