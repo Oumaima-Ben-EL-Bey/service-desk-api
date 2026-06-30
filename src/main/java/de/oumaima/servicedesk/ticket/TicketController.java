@@ -2,9 +2,9 @@ package de.oumaima.servicedesk.ticket;
 
 import de.oumaima.servicedesk.user.CustomUserDetails;
 import de.oumaima.servicedesk.user.User;
-import de.oumaima.servicedesk.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -29,6 +29,7 @@ public class TicketController {
 
         return ResponseEntity.status(HttpStatus.CREATED).body(TicketMapper.toResponse(saved));
     }
+    @PreAuthorize("@ticketSecurity.canAccess(#id, principal)")
     @GetMapping("/{id}")
     public TicketResponse getById(@PathVariable Long id) {
         Ticket ticket = ticketRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
