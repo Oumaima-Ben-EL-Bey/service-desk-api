@@ -4,8 +4,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
-
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
@@ -15,7 +13,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
     @Override
     public CustomUserDetails loadUserByUsername(String username) {
-        User user = userRepository.findByEmailWithRoles(username).orElseThrow(()-> new UsernameNotFoundException("No user with email: " + username));
+        User user = userRepository.findByEmailWithRolesAndTeam(username).orElseThrow(()-> new UsernameNotFoundException("No user with email: " + username));
     return new CustomUserDetails(user);
     }
 
