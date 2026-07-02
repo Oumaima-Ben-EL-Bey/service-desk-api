@@ -66,4 +66,12 @@ public class TicketController {
         Ticket updated = ticketService.changeStatus(id, request.status());
         return TicketMapper.toResponse(updated);
     }
+
+    @PreAuthorize("@ticketSecurity.canClaim(#id, principal)")
+    @PostMapping("/{id}/claim")
+    public TicketResponse claim(@PathVariable Long id,
+                                @AuthenticationPrincipal CustomUserDetails principal) {
+        Ticket updated = ticketService.claim(id, principal.getUser());
+        return TicketMapper.toResponse(updated);
+    }
 }

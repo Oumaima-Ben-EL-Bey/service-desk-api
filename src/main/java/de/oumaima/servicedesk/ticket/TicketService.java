@@ -1,5 +1,6 @@
 package de.oumaima.servicedesk.ticket;
 
+import de.oumaima.servicedesk.user.User;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,19 @@ public class TicketService {
         }
 
         ticket.setStatus(target);
+        return ticketRepository.save(ticket);
+    }
+    @Transactional
+    public Ticket claim(Long ticketId, User assignee) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        if (ticket.getStatus() == TicketStatus.CLOSED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot assign a closed ticket");
+        }
+        ticket.setAssignee(assignee);
+
+
         return ticketRepository.save(ticket);
     }
 }
