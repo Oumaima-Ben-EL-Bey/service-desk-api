@@ -360,6 +360,84 @@ public class TicketControllerTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
     }
+    @Test
+    void agentClaimsTicketInTheirTeam() throws Exception {
+        Team team = saveTeam("Claim_Team");
+        User agent = saveUserWithRole("claim-agent1@example.com", "AGENT", team);
+        User requester = saveUser("claim-req1@example.com");
+        Ticket ticket = saveTicket("Claim me", requester, team);
+
+        String token = jwtService.generateToken("claim-agent1@example.com");
+
+        String body = mockMvc.perform(post("/tickets/" + ticket.getId() + "/claim")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        TicketResponse claimed = objectMapper.readValue(body, TicketResponse.class);
+        assertThat(claimed.assigneeId()).isEqualTo(agent.getId());
+    }
+
+    @Test
+    void agentCannotClaimTicketInOtherTeam() throws Exception {
+        Team team1 = saveTeam("Claim_Team1");
+        Team team2 = saveTeam("Claim_Team2");
+        User agent = saveUserWithRole("claim-agent11@example.com", "AGENT", team1);
+        User requester = saveUser("claim-req2@example.com");
+        Ticket ticket = saveTicket("Claim me", requester, team2);
+
+        String token = jwtService.generateToken("claim-agent11@example.com");
+
+        mockMvc.perform(post("/tickets/" + ticket.getId() + "/claim")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+    }
+
+    @Test
+    void adminCannotClaim() throws Exception {
+        Team team = saveTeam("Claim_Team_ad");
+        User agent = saveUserWithRole("claim-admin@example.com", "ADMIN", null);
+        User requester = saveUser("claim-req3@example.com");
+        Ticket ticket = saveTicket("Claim me", requester, team);
+
+        String token = jwtService.generateToken("claim-admin@example.com");
+
+        mockMvc.perform(post("/tickets/" + ticket.getId() + "/claim")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+    }
+
+    @Test
+    void  requesterCannotClaim() throws Exception {
+        Team team = saveTeam("Claim_Team_req");
+        User requester = saveUser("claim-req4@example.com");
+        Ticket ticket = saveTicket("Claim me", requester, team);
+
+        String token = jwtService.generateToken("claim-req4@example.com");
+
+        mockMvc.perform(post("/tickets/" + ticket.getId() + "/claim")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+    }
+
+    @Test
+    void  cannotClaimClosedTicket() throws Exception {
+        Team team = saveTeam("Claim_Team4");
+        User agent = saveUserWithRole("claim-agent4@example.com", "AGENT", team);
+        User requester = saveUser("claim-req5@example.com");
+        Ticket ticket = saveTicket("Closed one", requester, team);
+        ticket.setStatus(TicketStatus.CLOSED);
+        ticketRepository.save(ticket);
+        String token = jwtService.generateToken("claim-agent4@example.com");
+
+        mockMvc.perform(post("/tickets/" + ticket.getId() + "/claim")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict());
+
+    }
 
 
 }

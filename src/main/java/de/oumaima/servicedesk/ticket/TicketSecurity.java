@@ -47,5 +47,16 @@ public class TicketSecurity {
         return isAdminOrTeamAgent(ticket, user);
     }
 
+    public boolean canClaim(Long id, CustomUserDetails principal) {
+        Ticket ticket = ticketRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        User user = principal.getUser();
+        return user.hasRole("AGENT")
+                && ticket.getTeam() != null
+                && user.getTeam() != null
+                && ticket.getTeam().getId().equals(user.getTeam().getId());
+    }
+
+
 
 }
