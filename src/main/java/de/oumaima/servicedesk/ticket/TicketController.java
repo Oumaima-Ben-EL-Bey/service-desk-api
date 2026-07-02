@@ -74,4 +74,12 @@ public class TicketController {
         Ticket updated = ticketService.claim(id, principal.getUser());
         return TicketMapper.toResponse(updated);
     }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/{id}/assignee")
+    public TicketResponse assign(@PathVariable Long id,
+                                 @RequestBody AssignRequest request) {
+        Ticket updated = ticketService.assign(id, request.assigneeId());
+        return TicketMapper.toResponse(updated);
+    }
 }
