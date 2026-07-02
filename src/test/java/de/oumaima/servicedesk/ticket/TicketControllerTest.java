@@ -438,6 +438,109 @@ public class TicketControllerTest {
                 .andExpect(status().isConflict());
 
     }
+    @Test
+    void adminAssignsAgentToTicket() throws Exception {
+        Team team = saveTeam("Assign_Team1");
+        saveUserWithRole("assign-admin1@example.com", "ADMIN", null);
+        User agent = saveUserWithRole("assign-agent1@example.com", "AGENT", team);
+        User requester = saveUser("assign-req1@example.com");
+        Ticket ticket = saveTicket("Assign me", requester, team);
 
+        String token = jwtService.generateToken("assign-admin1@example.com");
+        AssignRequest request = new AssignRequest(agent.getId());
+
+        String body = mockMvc.perform(patch("/tickets/" + ticket.getId() + "/assignee")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        TicketResponse assigned = objectMapper.readValue(body, TicketResponse.class);
+        assertThat(assigned.assigneeId()).isEqualTo(agent.getId());
+    }
+
+    @Test
+    void agentCannotAssign() throws Exception {
+        Team team = saveTeam("Assign_Team2");
+        User agent = saveUserWithRole("assign-agent2@example.com", "AGENT", team);
+        User requester = saveUser("assign-req2@example.com");
+        Ticket ticket = saveTicket("Assign me", requester, team);
+
+        String token = jwtService.generateToken("assign-agent2@example.com");
+        AssignRequest request = new AssignRequest(agent.getId());
+
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/assignee")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+
+
+    }
+
+    @Test
+    void cannotAssignClosedTicket() throws Exception {
+        Team team = saveTeam("Assign_Team3");
+        saveUserWithRole("assign-admin3@example.com", "ADMIN", null);
+        User agent = saveUserWithRole("assign-agent3@example.com", "AGENT", team);
+        User requester = saveUser("assign-req3@example.com");
+        Ticket ticket = saveTicket("Assign me", requester, team);
+        ticket.setStatus(TicketStatus.CLOSED);
+        ticketRepository.save(ticket);
+        String token = jwtService.generateToken("assign-admin3@example.com");
+        AssignRequest request = new AssignRequest(agent.getId());
+
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/assignee")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict());
+
+    }
+
+    @Test
+    void  assignToNonexistentUser() throws Exception {
+        Team team = saveTeam("Assign_Team4");
+        saveUserWithRole("assign-admin4@example.com", "ADMIN", null);
+        User requester = saveUser("assign-req4@example.com");
+        Ticket ticket = saveTicket("Assign me", requester, team);
+
+        String token = jwtService.generateToken("assign-admin4@example.com");
+        AssignRequest request = new AssignRequest(99999L);
+
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/assignee")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
+
+    }
+
+    @Test
+    void adminReassignsToAnotherAgent() throws Exception {
+        Team team = saveTeam("Assign_Team5");
+        saveUserWithRole("assign-admin5@example.com", "ADMIN", null);
+        User agent1 = saveUserWithRole("assign-agent51@example.com", "AGENT", team);
+        User agent2 = saveUserWithRole("assign-agent52@example.com", "AGENT", team);
+
+        User requester = saveUser("assign-req5@example.com");
+        Ticket ticket = saveTicket("Assign me", requester, team);
+        ticket.setAssignee(agent1);
+        ticketRepository.save(ticket);
+
+        String token = jwtService.generateToken("assign-admin5@example.com");
+        AssignRequest request = new AssignRequest(agent2.getId());
+
+        String body = mockMvc.perform(patch("/tickets/" + ticket.getId() + "/assignee")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        TicketResponse assigned = objectMapper.readValue(body, TicketResponse.class);
+        assertThat(assigned.assigneeId()).isEqualTo(agent2.getId());
+    }
 
 }
