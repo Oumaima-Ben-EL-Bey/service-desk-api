@@ -17,8 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -242,5 +241,125 @@ public class TicketControllerTest {
                 .contains(NetTicket.getId())
                 .contains(HarTicket.getId());
     }
+    @Test
+    void changeStatus_legalMove_returns200AndNewStatus() throws Exception {
+        saveUserWithRole("status-admin1@example.com", "ADMIN", null);
+        User requester = saveUser("status-req1@example.com");
+        Ticket ticket = saveTicket("Move me", requester, null);   // saved as NEW
+
+        String token = jwtService.generateToken("status-admin1@example.com");
+        ChangeStatusRequest request = new ChangeStatusRequest(TicketStatus.IN_PROGRESS);
+
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/status")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+
+        mockMvc.perform(get("/tickets/" + ticket.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+
+    }
+
+    @Test
+    void changeStatus_illegalMove_returns409() throws Exception {
+        saveUserWithRole("status-admin2@example.com", "ADMIN", null);
+        User requester = saveUser("status-req2@example.com");
+        Ticket ticket = saveTicket("Closed one", requester, null);   // saved as NEW
+        ticket.setStatus(TicketStatus.CLOSED);
+        ticketRepository.save(ticket);
+
+        String token = jwtService.generateToken("status-admin2@example.com");
+        ChangeStatusRequest request = new ChangeStatusRequest(TicketStatus.IN_PROGRESS);
+
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/status")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void changeStatus_NoTicket_returns404() throws Exception {
+        saveUserWithRole("status-admin3@example.com", "ADMIN", null);
+
+
+        String token = jwtService.generateToken("status-admin3@example.com");
+        ChangeStatusRequest request = new ChangeStatusRequest(TicketStatus.IN_PROGRESS);
+
+        mockMvc.perform(patch("/tickets/" + 99999 + "/status")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
+
+    }
+
+    @Test
+    void requesterCannotChangeStatusOfOwnTicket() throws Exception {
+        User requester = saveUser("status-req-forbidden@example.com");
+        Ticket ticket = saveTicket("Mine", requester, null);
+
+        String token = jwtService.generateToken("status-req-forbidden@example.com");
+        ChangeStatusRequest request = new ChangeStatusRequest(TicketStatus.IN_PROGRESS);
+
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/status")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+    @Test
+    void agentCanChangeStatusInTheirTeam() throws Exception {
+        Team teamNetStat = saveTeam("Network_Stat1");
+        User requester = saveUser("status-requester1@example.com");
+        Ticket ticket = saveTicket("Assigned", requester, teamNetStat);
+        User agentNet = saveUserWithRole("agent_Net_team@example.com", "AGENT", teamNetStat);
+        String token = jwtService.generateToken("agent_Net_team@example.com");
+        ChangeStatusRequest request = new ChangeStatusRequest(TicketStatus.IN_PROGRESS);
+
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/status")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void agentCannotChangeStatusInOtherTeam() throws Exception {
+        Team teamNetStat = saveTeam("Network_Stat2");
+        Team teamHarStat = saveTeam("Hardware_Stat");
+        User requester = saveUser("status-requester2@example.com");
+        Ticket ticket = saveTicket("Assigned", requester, teamNetStat);
+        User agentHar = saveUserWithRole("agent_Har_team@example.com", "AGENT", teamHarStat);
+        String token = jwtService.generateToken("agent_Har_team@example.com");
+        ChangeStatusRequest request = new ChangeStatusRequest(TicketStatus.IN_PROGRESS);
+
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/status")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+
+    @Test
+    void agentCanSeeTicketTheyRequestedInAnotherTeam() throws Exception {
+        // agent belongs to team A...
+        Team agentTeam = saveTeam("AgentOwnTeam");
+        Team otherTeam = saveTeam("SomeOtherTeam");
+        User agentRequester = saveUserWithRole("agent-req-other@example.com", "AGENT", agentTeam);
+        // ...but the ticket is in team B, and THIS agent is its requester
+        Ticket ticket = saveTicket("My own issue", agentRequester, otherTeam);
+
+        String token = jwtService.generateToken("agent-req-other@example.com");
+        mockMvc.perform(get("/tickets/" + ticket.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
 
 }

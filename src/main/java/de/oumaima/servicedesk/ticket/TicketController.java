@@ -16,9 +16,11 @@ import java.util.List;
 public class TicketController {
 
     private final TicketRepository ticketRepository;
+    private final TicketService ticketService;
 
-    public TicketController(TicketRepository ticketRepository) {
+    public TicketController(TicketRepository ticketRepository, TicketService ticketService) {
         this.ticketRepository = ticketRepository;
+        this.ticketService = ticketService;
     }
 
     @PostMapping
@@ -55,5 +57,13 @@ public class TicketController {
         }
 
         return tickets.stream().map(TicketMapper::toResponse).toList();
+    }
+
+    @PreAuthorize("@ticketSecurity.canChangeStatus(#id, principal)")
+    @PatchMapping("/{id}/status")
+    public TicketResponse changeStatus(@PathVariable Long id,
+                                       @RequestBody ChangeStatusRequest request) {
+        Ticket updated = ticketService.changeStatus(id, request.status());
+        return TicketMapper.toResponse(updated);
     }
 }

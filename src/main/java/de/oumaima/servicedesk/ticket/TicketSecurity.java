@@ -14,10 +14,9 @@ public class TicketSecurity {
         this.ticketRepository = ticketRepository;
     }
 
-    public boolean canAccess(Long id, CustomUserDetails principal) {
-        Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(()-> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
-        User user = principal.getUser();
+
+
+    private boolean isAdminOrTeamAgent(Ticket ticket, User user) {
         if (user.hasRole("ADMIN")) {
             return true;
         }
@@ -26,7 +25,27 @@ public class TicketSecurity {
                     && user.getTeam() != null
                     && ticket.getTeam().getId().equals(user.getTeam().getId());
         }
+        return false;
+    }
+    public boolean canAccess(Long id, CustomUserDetails principal) {
+        Ticket ticket = ticketRepository.findById(id)
+                .orElseThrow(()-> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        User user = principal.getUser();
+        if(isAdminOrTeamAgent(ticket, user)) {
+            return true;
+        }
         return ticket.getRequester().getId().equals(user.getId());
     }
+
+
+
+    public boolean canChangeStatus(Long id, CustomUserDetails principal) {
+        Ticket ticket = ticketRepository.findById(id)
+                .orElseThrow(()-> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        User user = principal.getUser();
+
+        return isAdminOrTeamAgent(ticket, user);
+    }
+
 
 }
