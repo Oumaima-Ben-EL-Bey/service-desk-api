@@ -8,6 +8,8 @@ import de.oumaima.servicedesk.user.User;
 import de.oumaima.servicedesk.team.Team;
 import de.oumaima.servicedesk.user.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -542,5 +544,27 @@ public class TicketControllerTest {
         TicketResponse assigned = objectMapper.readValue(body, TicketResponse.class);
         assertThat(assigned.assigneeId()).isEqualTo(agent2.getId());
     }
+
+    @ParameterizedTest
+    @EnumSource(TicketCategory.class)
+    void ticketRoutesToTeamMatchingItsCategory(TicketCategory category) throws Exception {
+        // unique user per run — the category makes the email distinct
+        saveUser("route-" + category + "@example.com");
+        String token = jwtService.generateToken("route-" + category + "@example.com");
+
+        Team expectedTeam = teamRepository.findByCategory(category).orElseThrow();
+
+        CreateTicketRequest request = new CreateTicketRequest(
+                "Issue with " + category, "cannot connect", category);
+
+        mockMvc.perform(post("/tickets")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.teamId").value(expectedTeam.getId()));
+    }
+
+
 
 }

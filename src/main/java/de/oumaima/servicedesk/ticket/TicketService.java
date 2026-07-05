@@ -1,5 +1,6 @@
 package de.oumaima.servicedesk.ticket;
 
+import de.oumaima.servicedesk.team.TeamRepository;
 import de.oumaima.servicedesk.user.User;
 import de.oumaima.servicedesk.user.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -12,10 +13,13 @@ public class TicketService {
 
     private final TicketRepository ticketRepository;
     private final UserRepository userRepository;
+    private final TeamRepository teamRepository;
 
-    public TicketService(TicketRepository ticketRepository, UserRepository userRepository) {
+
+    public TicketService(TicketRepository ticketRepository, UserRepository userRepository, TeamRepository teamRepository) {
         this.ticketRepository = ticketRepository;
         this.userRepository = userRepository;
+        this.teamRepository = teamRepository;
     }
 
     @Transactional
@@ -56,6 +60,16 @@ public class TicketService {
         User assignee = userRepository.findById(assigneeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         ticket.setAssignee(assignee);
+        return ticketRepository.save(ticket);
+    }
+
+    @Transactional
+    public Ticket create(CreateTicketRequest request, User requester) {
+        Ticket ticket = TicketMapper.toEntity(request, requester);
+
+        teamRepository.findByCategory(ticket.getCategory())
+                .ifPresent(ticket::setTeam);
+
         return ticketRepository.save(ticket);
     }
 }

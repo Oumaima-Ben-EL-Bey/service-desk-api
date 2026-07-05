@@ -26,11 +26,7 @@ public class TicketController {
     @PostMapping
     public ResponseEntity<TicketResponse> create(@RequestBody CreateTicketRequest request,
                                                  @AuthenticationPrincipal CustomUserDetails principal) {
-        User requester = principal.getUser();
-
-        Ticket ticket = TicketMapper.toEntity(request, requester);
-        Ticket saved = ticketRepository.save(ticket);
-
+        Ticket saved = ticketService.create(request, principal.getUser());
         return ResponseEntity.status(HttpStatus.CREATED).body(TicketMapper.toResponse(saved));
     }
 
