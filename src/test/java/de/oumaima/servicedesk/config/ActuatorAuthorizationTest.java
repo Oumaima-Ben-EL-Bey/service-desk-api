@@ -39,7 +39,7 @@ public class ActuatorAuthorizationTest {
 
         mockMvc.perform(get("/actuator/metrics")
                         .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
     }
     @Test
     void requester_isForbiddenFromActuator() throws Exception {
