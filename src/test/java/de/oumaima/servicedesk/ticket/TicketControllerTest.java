@@ -8,6 +8,7 @@ import de.oumaima.servicedesk.user.RoleRepository;
 import de.oumaima.servicedesk.user.User;
 import de.oumaima.servicedesk.team.Team;
 import de.oumaima.servicedesk.user.UserRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -36,6 +37,7 @@ public class TicketControllerTest {
     @Autowired private TicketRepository ticketRepository;
     @Autowired private RoleRepository roleRepository;
     @Autowired private TeamRepository teamRepository;
+    @Autowired private MeterRegistry meterRegistry;
 
     private User saveUser(String email) {
         User u = new User();
@@ -651,6 +653,64 @@ public class TicketControllerTest {
 
 
     }
+    @Test
+    void createTicket_incrementsCreatedCounter() throws Exception {
+        saveUser("metrics-req@example.com");
+        String token = jwtService.generateToken("metrics-req@example.com");
 
+        double before = meterRegistry.get("tickets.created").counter().count();
 
+        CreateTicketRequest request = new CreateTicketRequest(
+                "Printer down", "3rd floor printer offline", TicketCategory.NETWORK);
+
+        mockMvc.perform(post("/tickets")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        double after = meterRegistry.get("tickets.created").counter().count();
+        assertThat(after - before).isEqualTo(1.0);
+    }
+
+    @Test
+    void changeStatusToResolved_incrementsResolvedCounter() throws Exception {
+        saveUserWithRole("metrics-admin@example.com", "ADMIN", null);
+        User requester = saveUser("metrics-res-req@example.com");
+        Ticket ticket = saveTicket("Broken laptop", requester, null);
+        String token = jwtService.generateToken("metrics-admin@example.com");
+
+        double before = meterRegistry.get("tickets.resolved").counter().count();
+
+        ChangeStatusRequest request = new ChangeStatusRequest(TicketStatus.RESOLVED);
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/status")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RESOLVED"));
+
+        double after = meterRegistry.get("tickets.resolved").counter().count();
+        assertThat(after - before).isEqualTo(1.0);
+    }
+    @Test
+    void changeStatusToNonResolved_doesNotIncrementResolvedCounter() throws Exception {
+        saveUserWithRole("metrics-admin2@example.com", "ADMIN", null);
+        User requester = saveUser("metrics-nores-req@example.com");
+        Ticket ticket = saveTicket("VPN flaky", requester, null);
+        String token = jwtService.generateToken("metrics-admin2@example.com");
+
+        double before = meterRegistry.get("tickets.resolved").counter().count();
+
+        ChangeStatusRequest request = new ChangeStatusRequest(TicketStatus.IN_PROGRESS);
+        mockMvc.perform(patch("/tickets/" + ticket.getId() + "/status")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+
+        double after = meterRegistry.get("tickets.resolved").counter().count();
+        assertThat(after - before).isEqualTo(0.0);
+    }
 }

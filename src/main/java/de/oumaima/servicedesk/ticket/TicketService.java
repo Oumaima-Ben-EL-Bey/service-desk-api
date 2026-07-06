@@ -3,23 +3,32 @@ package de.oumaima.servicedesk.ticket;
 import de.oumaima.servicedesk.team.TeamRepository;
 import de.oumaima.servicedesk.user.User;
 import de.oumaima.servicedesk.user.UserRepository;
+import io.micrometer.core.instrument.Counter;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
+import io.micrometer.core.instrument.MeterRegistry;
 @Service
 public class TicketService {
 
     private final TicketRepository ticketRepository;
     private final UserRepository userRepository;
     private final TeamRepository teamRepository;
+    private final Counter ticketsCreated;
+    private final Counter ticketsResolved;
 
 
-    public TicketService(TicketRepository ticketRepository, UserRepository userRepository, TeamRepository teamRepository) {
+    public TicketService(TicketRepository ticketRepository, UserRepository userRepository, TeamRepository teamRepository, MeterRegistry meterRegistry) {
         this.ticketRepository = ticketRepository;
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
+        this.ticketsCreated = Counter.builder("tickets.created")
+                .description("Total tickets created")
+                .register(meterRegistry);
+        this.ticketsResolved = Counter.builder("tickets.resolved")
+                .description("Total tickets resolved")
+                .register(meterRegistry);
     }
 
     @Transactional
@@ -33,7 +42,11 @@ public class TicketService {
         }
 
         ticket.setStatus(target);
-        return ticketRepository.save(ticket);
+        Ticket saved = ticketRepository.save(ticket);
+        if (target == TicketStatus.RESOLVED) {
+            ticketsResolved.increment();
+        }
+        return saved;
     }
     @Transactional
     public Ticket claim(Long ticketId, User assignee) {
@@ -70,6 +83,8 @@ public class TicketService {
         teamRepository.findByCategory(ticket.getCategory())
                 .ifPresent(ticket::setTeam);
 
-        return ticketRepository.save(ticket);
+        Ticket saved = ticketRepository.save(ticket);
+        ticketsCreated.increment();
+        return saved;
     }
 }
