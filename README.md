@@ -66,6 +66,45 @@ The API listens on `http://localhost:8080`.
 - `POST /register` — create a user (open).
 - `POST /login` — exchange valid credentials for a signed JWT.
 
+## Observability
+
+The API exposes operational endpoints and structured logs for monitoring in production.
+
+### Actuator endpoints
+
+Exposed under `/actuator`:
+
+| Endpoint               | Access     | Purpose                                                           |
+|------------------------|------------|-------------------------------------------------------------------|
+| `/actuator/health`     | Public     | Liveness/readiness and dependency checks (database, disk).        |
+| `/actuator/info`       | Admin only | Application/build info.                                           |
+| `/actuator/metrics`    | Admin only | Metrics in JSON; drill into one via `/actuator/metrics/{name}`.   |
+| `/actuator/prometheus` | Admin only | All metrics in Prometheus scrape format.                          |
+
+Every endpoint except `/actuator/health` requires a JWT belonging to a user with the
+`ADMIN` role. `/actuator/health` reports full component details.
+
+### Business metrics
+
+Alongside the standard JVM and HTTP metrics, the API publishes two domain counters:
+
+| Metric            | Prometheus name         | Meaning                                       |
+|-------------------|-------------------------|-----------------------------------------------|
+| `tickets.created` | `tickets_created_total` | Total tickets created.                        |
+| `tickets.resolved`| `tickets_resolved_total`| Total transitions into the `RESOLVED` status. |
+
+### Structured logging and correlation IDs
+
+Console logs are emitted as structured JSON (Elastic Common Schema) for ingestion by a
+log aggregator. Each request is assigned a correlation ID, which is:
+
+- read from the inbound `X-Correlation-Id` header when present, otherwise generated;
+- attached to every log line produced while handling the request (the `correlationId` field);
+- returned to the caller in the `X-Correlation-Id` response header.
+
+This lets a single request be traced across all of its log lines, and lets a caller quote
+the ID from a failed response when reporting a problem.
+
 ## Running the tests
 
 ```bash
