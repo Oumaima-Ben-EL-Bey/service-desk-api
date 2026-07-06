@@ -1,6 +1,7 @@
 package de.oumaima.servicedesk.ticket;
 
 import de.oumaima.servicedesk.TestcontainersConfiguration;
+import de.oumaima.servicedesk.comment.CreateCommentRequest;
 import de.oumaima.servicedesk.team.TeamRepository;
 import de.oumaima.servicedesk.user.JwtService;
 import de.oumaima.servicedesk.user.RoleRepository;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.in;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -565,6 +567,90 @@ public class TicketControllerTest {
                 .andExpect(jsonPath("$.teamId").value(expectedTeam.getId()));
     }
 
+
+    @Test
+    void ticketLifecycle_createClaimProgressResolveClose() throws Exception {
+        // The requester who opens the ticket.
+        User requester = saveUser("lifecycle-req@example.com");
+
+        // The agent who will work it. For a NETWORK ticket to route AND for the agent to be
+        // allowed to act on it, the agent must belong to the Network team — the one your V5
+        // migration seeded. So look it up by category instead of making a fresh team.
+        Team network = teamRepository.findByCategory(TicketCategory.NETWORK).orElseThrow();
+        User agent = saveUserWithRole("lifecycle-agent@example.com", "AGENT", network);
+
+        String reqToken = jwtService.generateToken("lifecycle-req@example.com");
+        CreateTicketRequest createReq =
+                new CreateTicketRequest("VPN down", "cannot connect", TicketCategory.NETWORK);
+
+        String createdBody = mockMvc.perform(post("/tickets")
+                        .header("Authorization", "Bearer " + reqToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createReq)))
+                .andExpect(status().isCreated())                       // 201
+                .andExpect(jsonPath("$.status").value("NEW"))          // brand-new ticket
+                .andExpect(jsonPath("$.teamId").value(network.getId())) // routing fired
+                .andExpect(jsonPath("$.requesterId").value(requester.getId()))
+                .andReturn().getResponse().getContentAsString();
+
+        TicketResponse created = objectMapper.readValue(createdBody, TicketResponse.class);
+
+        String agToken = jwtService.generateToken("lifecycle-agent@example.com");
+
+        String claimedBody = mockMvc.perform(post("/tickets/" + created.id() + "/claim")
+                        .header("Authorization", "Bearer " + agToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        TicketResponse claimed = objectMapper.readValue(claimedBody, TicketResponse.class);
+        assertThat(claimed.assigneeId()).isEqualTo(agent.getId());
+
+        ChangeStatusRequest inprogRequest = new ChangeStatusRequest(TicketStatus.IN_PROGRESS);
+
+        mockMvc.perform(patch("/tickets/" + claimed.id() + "/status")
+                        .header("Authorization", "Bearer " + agToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(inprogRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+
+        CreateCommentRequest comRequest = new CreateCommentRequest("Looking into it now.");
+        mockMvc.perform(post("/tickets/" + claimed.id() + "/comments")
+                        .header("Authorization", "Bearer " + agToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(comRequest)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.body").value("Looking into it now."))
+                .andExpect(jsonPath("$.authorId").value(agent.getId()));
+
+        ChangeStatusRequest resRequest = new ChangeStatusRequest(TicketStatus.RESOLVED);
+
+        mockMvc.perform(patch("/tickets/" + claimed.id() + "/status")
+                        .header("Authorization", "Bearer " + agToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(resRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RESOLVED"));
+
+        ChangeStatusRequest cloRequest = new ChangeStatusRequest(TicketStatus.CLOSED);
+
+        mockMvc.perform(patch("/tickets/" + claimed.id() + "/status")
+                        .header("Authorization", "Bearer " + agToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(cloRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+
+
+        mockMvc.perform(get("/tickets/" + claimed.id())
+                        .header("Authorization", "Bearer " + agToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"))
+                .andExpect( jsonPath("$.assigneeId").value(agent.getId()))
+                .andExpect(jsonPath("$.teamId").value(network.getId()));
+
+
+    }
 
 
 }
