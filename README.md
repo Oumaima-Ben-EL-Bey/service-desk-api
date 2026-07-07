@@ -1,54 +1,109 @@
 # Service Desk API
 
+[![CI](https://github.com/Oumaima-Ben-EL-Bey/service-desk-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Oumaima-Ben-EL-Bey/service-desk-api/actions/workflows/ci.yml)
+
 A REST API for an internal IT service desk: employees submit support tickets, and
-IT staff triage, assign, and resolve them. This is a portfolio project and is under
-active development.
+IT staff triage, assign, and resolve them. Built as a portfolio project to
+demonstrate production-grade backend patterns — JWT authentication, role-based
+authorization, database migrations, transactional workflow logic, and
+observability.
+
+## Live demo
+
+| | |
+|---|---|
+| **API base URL** | https://service-desk-api.fly.dev |
+| **Interactive docs (Swagger UI)** | https://service-desk-api.fly.dev/swagger-ui.html |
+| **Health** | https://service-desk-api.fly.dev/actuator/health |
+
+> The app auto-stops when idle to keep hosting costs near zero, so the **first
+> request after a period of inactivity may take a few seconds** to wake it up.
+> Subsequent requests are fast.
 
 ## Tech stack
 
-- Java 21, Spring Boot
-- Spring Security (JWT-based authentication)
-- Spring Data JPA, PostgreSQL, Flyway migrations
-- Maven, Docker, Testcontainers
+- **Java 21**, **Spring Boot**
+- **Spring Security** with JWT-based authentication and role-based access control
+- **Spring Data JPA**, **PostgreSQL**, **Flyway** migrations
+- **Spring Actuator** + structured JSON logging for observability
+- **springdoc-openapi** for OpenAPI 3 / Swagger UI
+- **Maven**, **Docker** / Docker Compose
+- **JUnit 5**, **Mockito**, **Testcontainers**
+- Deployed on **Fly.io** with a **Neon** serverless PostgreSQL database
 
-## Prerequisites
+## Architecture overview
 
-- JDK 21
-- Docker (for PostgreSQL and for the integration tests)
+The codebase is organised **feature-by-feature**, not layer-by-layer: each domain
+module (`user`, `team`, `ticket`, `comment`) holds its own entity, repository,
+service, controller, and DTOs, with cross-cutting code in `config` and `shared`.
 
-## Configuration
+- **Authentication** — registration and login issue a signed JWT (BCrypt-hashed
+  passwords). A filter validates the token on each request and populates the
+  security context.
+- **Authorization** — three roles (`REQUESTER`, `AGENT`, `ADMIN`) enforced both
+  *vertically* (which roles may call which endpoints) and *horizontally* (a
+  requester sees only their own tickets; an agent sees their team's queue).
+- **Schema** — all database schema is versioned as Flyway SQL migrations
+  (`src/main/resources/db/migration`); Hibernate runs in `validate` mode and
+  never modifies the schema.
+- **Ticket lifecycle** — status transitions are validated, tickets are routed to
+  teams by category, and the write paths run inside explicit transaction
+  boundaries.
+- **Observability** — Actuator health/metrics/Prometheus endpoints, custom
+  business metrics (tickets created / resolved), and per-request correlation IDs
+  propagated into structured JSON logs.
 
-Non-secret configuration lives in `src/main/resources/application.properties`.
-Secrets and credentials are **not** committed — they are supplied as environment
-variables at runtime.
+## API documentation
 
-### Required environment variables
+The API serves auto-generated OpenAPI 3 documentation:
 
-| Variable                     | Description                                                        |
-|------------------------------|--------------------------------------------------------------------|
-| `SPRING_DATASOURCE_PASSWORD` | Password for the PostgreSQL user the app connects as.              |
-| `JWT_SECRET`                 | Secret key used to sign JWTs. Must be at least 32 bytes (characters). |
+- **Swagger UI** — `/swagger-ui.html` ([live](https://service-desk-api.fly.dev/swagger-ui.html))
+- **OpenAPI spec (JSON)** — `/v3/api-docs`
 
-The datasource URL (`jdbc:postgresql://localhost:5432/servicedesk`) and username
-(`servicedesk`) are non-secret and live in `application.properties`.
+Most endpoints require authentication. In Swagger UI, register and log in via the
+open endpoints, copy the returned token, click **Authorize**, and paste it to
+call the protected endpoints directly from the browser.
 
 ## Running locally
 
-1. Start a PostgreSQL 16 instance. For local development:
+You need **JDK 21** and **Docker** (Docker is also required for the integration
+tests, which start a real PostgreSQL container).
 
-   ```bash
-   docker run --name service-desk-db \
-     -e POSTGRES_DB=servicedesk \
-     -e POSTGRES_USER=servicedesk \
-     -e POSTGRES_PASSWORD=devpassword \
-     -p 5432:5432 -d postgres:16
+### Option A — Docker Compose (app + database together)
+
+This runs the whole stack — the API and a PostgreSQL 16 database — with one
+command.
+
+1. Create a `.env` file in the project root (it is gitignored — never committed):
+
+   ```
+   SPRING_DATASOURCE_PASSWORD=devpassword
+   JWT_SECRET=a-long-random-string-at-least-32-characters
    ```
 
-2. Set the required environment variables (matching the password above):
+2. Bring the stack up:
+
+   ```bash
+   docker compose up --build
+   ```
+
+The API is available at http://localhost:8080, and Swagger UI at
+http://localhost:8080/swagger-ui.html. Stop it with `docker compose down` (add
+`-v` to also discard the database volume).
+
+### Option B — run the app directly
+
+1. Start a PostgreSQL 16 database:
+
+   ```bash
+   docker compose up -d db
+   ```
+
+2. Set the required environment variables:
 
    ```bash
    export SPRING_DATASOURCE_PASSWORD=devpassword
-   export JWT_SECRET=<a-long-random-string-at-least-32-characters>
+   export JWT_SECRET=a-long-random-string-at-least-32-characters
    ```
 
 3. Run the application (Flyway applies the schema migrations on startup):
@@ -59,20 +114,36 @@ The datasource URL (`jdbc:postgresql://localhost:5432/servicedesk`) and username
 
    On Windows, use `mvnw.cmd` in place of `./mvnw`.
 
-The API listens on `http://localhost:8080`.
+## Configuration
+
+Non-secret configuration lives in `src/main/resources/application.properties`.
+Secrets are supplied as environment variables and are **never** committed.
+
+### Required environment variables
+
+| Variable                     | Description                                                          |
+|------------------------------|----------------------------------------------------------------------|
+| `SPRING_DATASOURCE_PASSWORD` | Password for the PostgreSQL user the app connects as.                |
+| `JWT_SECRET`                 | Secret key used to sign JWTs. Must be at least 32 bytes (characters).|
+
+The datasource URL and username are non-secret and live in
+`application.properties`; in the deployed environment they are overridden by
+`SPRING_DATASOURCE_URL` and `SPRING_DATASOURCE_USERNAME` to point at the managed
+database.
 
 ## Authentication
 
 - `POST /register` — create a user (open).
 - `POST /login` — exchange valid credentials for a signed JWT.
 
+Send the token as `Authorization: Bearer <token>` on all protected endpoints.
+
 ## Observability
 
-The API exposes operational endpoints and structured logs for monitoring in production.
+The API exposes operational endpoints and structured logs for monitoring in
+production.
 
 ### Actuator endpoints
-
-Exposed under `/actuator`:
 
 | Endpoint               | Access     | Purpose                                                           |
 |------------------------|------------|-------------------------------------------------------------------|
@@ -81,12 +152,10 @@ Exposed under `/actuator`:
 | `/actuator/metrics`    | Admin only | Metrics in JSON; drill into one via `/actuator/metrics/{name}`.   |
 | `/actuator/prometheus` | Admin only | All metrics in Prometheus scrape format.                          |
 
-Every endpoint except `/actuator/health` requires a JWT belonging to a user with the
-`ADMIN` role. `/actuator/health` reports full component details.
+Every endpoint except `/actuator/health` requires a JWT belonging to a user with
+the `ADMIN` role.
 
 ### Business metrics
-
-Alongside the standard JVM and HTTP metrics, the API publishes two domain counters:
 
 | Metric            | Prometheus name         | Meaning                                       |
 |-------------------|-------------------------|-----------------------------------------------|
@@ -95,15 +164,11 @@ Alongside the standard JVM and HTTP metrics, the API publishes two domain counte
 
 ### Structured logging and correlation IDs
 
-Console logs are emitted as structured JSON (Elastic Common Schema) for ingestion by a
-log aggregator. Each request is assigned a correlation ID, which is:
-
-- read from the inbound `X-Correlation-Id` header when present, otherwise generated;
-- attached to every log line produced while handling the request (the `correlationId` field);
-- returned to the caller in the `X-Correlation-Id` response header.
-
-This lets a single request be traced across all of its log lines, and lets a caller quote
-the ID from a failed response when reporting a problem.
+Console logs are emitted as structured JSON (Elastic Common Schema). Each request
+is assigned a correlation ID that is read from the inbound `X-Correlation-Id`
+header (or generated), attached to every log line for that request, and returned
+in the `X-Correlation-Id` response header — so a single request can be traced
+across all of its log lines.
 
 ## Running the tests
 
@@ -112,4 +177,13 @@ the ID from a failed response when reporting a problem.
 ./mvnw verify     # full build including integration tests
 ```
 
-Docker must be running, as the integration tests start a real PostgreSQL container.
+Docker must be running, as the integration tests start a real PostgreSQL
+container.
+
+## Deployment
+
+The app is packaged as a multi-stage Docker image and deployed on **Fly.io**,
+backed by a **Neon** serverless PostgreSQL database. Pushes to `main` are
+deployed automatically via GitHub Actions (`.github/workflows/fly-deploy.yml`).
+Database credentials and the JWT secret are provided as Fly.io secrets and are
+never stored in the repository.
