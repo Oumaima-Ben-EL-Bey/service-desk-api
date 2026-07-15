@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 public class AuthController {
     private final UserService userService;
@@ -35,7 +37,12 @@ public class AuthController {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.email(), request.password())
         );
-        String token = jwtService.generateToken(authentication.getName());
+        CustomUserDetails principal = (CustomUserDetails) authentication.getPrincipal();
+        List<String> roles = principal.getUser().getRoles().stream()
+                .map(Role::getName)
+                .toList();
+
+        String token = jwtService.generateToken(authentication.getName(), roles);
         return new TokenResponse(token);
     }
 }
