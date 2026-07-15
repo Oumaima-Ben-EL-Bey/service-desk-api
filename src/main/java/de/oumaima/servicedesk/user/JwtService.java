@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class JwtService {
@@ -21,11 +22,16 @@ public class JwtService {
     }
 
     public String generateToken(String email) {
+        return generateToken(email, List.of());
+    }
+
+    public String generateToken(String email, List<String> roles) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
                 .subject(email)
+                .claim("roles", roles)
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(key)
