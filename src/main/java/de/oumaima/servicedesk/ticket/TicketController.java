@@ -2,6 +2,7 @@ package de.oumaima.servicedesk.ticket;
 
 import de.oumaima.servicedesk.user.CustomUserDetails;
 import de.oumaima.servicedesk.user.User;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,7 +25,7 @@ public class TicketController {
     }
 
     @PostMapping
-    public ResponseEntity<TicketResponse> create(@RequestBody CreateTicketRequest request,
+    public ResponseEntity<TicketResponse> create(@Valid @RequestBody CreateTicketRequest request,
                                                  @AuthenticationPrincipal CustomUserDetails principal) {
         Ticket saved = ticketService.create(request, principal.getUser());
         return ResponseEntity.status(HttpStatus.CREATED).body(TicketMapper.toResponse(saved));

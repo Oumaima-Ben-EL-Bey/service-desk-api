@@ -1,4 +1,6 @@
 package de.oumaima.servicedesk.comment;
 
-public record CreateCommentRequest(String body) {
+import jakarta.validation.constraints.NotBlank;
+
+public record CreateCommentRequest(@NotBlank String body) {
 }
