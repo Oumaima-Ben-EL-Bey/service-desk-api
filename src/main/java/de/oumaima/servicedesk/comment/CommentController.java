@@ -3,6 +3,7 @@ package de.oumaima.servicedesk.comment;
 
 import de.oumaima.servicedesk.user.CustomUserDetails;
 import de.oumaima.servicedesk.user.User;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,7 +26,7 @@ public class CommentController {
 
     @PostMapping
     @PreAuthorize("@ticketSecurity.canAccess(#ticketId, principal)")
-    public ResponseEntity<CommentResponse> create(@PathVariable Long ticketId, @RequestBody CreateCommentRequest request,
+    public ResponseEntity<CommentResponse> create(@PathVariable Long ticketId,@Valid @RequestBody CreateCommentRequest request,
                                                  @AuthenticationPrincipal CustomUserDetails principal) {
         User author = principal.getUser();
         Comment saved = commentService.create(ticketId, request.body(), author);
